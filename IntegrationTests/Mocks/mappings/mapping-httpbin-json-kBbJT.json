@@ -1,0 +1,19 @@
+{
+  "id" : "6a619a1b-c710-3371-abd5-15217a165063",
+  "request" : {
+    "url" : "/httpbin/json",
+    "method" : "GET"
+  },
+  "response" : {
+    "status" : 200,
+    "bodyFileName" : "body-httpbin-json-kBbJT.json",
+    "headers" : {
+      "Date" : "Sat, 17 Jan 2026 00:33:34 GMT",
+      "Content-Type" : "application/json",
+      "Server" : "gunicorn/19.9.0",
+      "Access-Control-Allow-Origin" : "*",
+      "Access-Control-Allow-Credentials" : "true"
+    }
+  },
+  "uuid" : "6a619a1b-c710-3371-abd5-15217a165063"
+}

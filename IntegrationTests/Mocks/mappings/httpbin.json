@@ -1,0 +1,10 @@
+{
+  "request": {
+    "method": "ANY",
+    "urlPattern": "/httpbin/.*"
+  },
+  "response": {
+    "proxyBaseUrl": "https://httpbin.org",
+    "proxyUrlPrefixToRemove": "/httpbin"
+  }
+}

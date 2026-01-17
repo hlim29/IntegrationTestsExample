@@ -1,0 +1,10 @@
+﻿namespace IntegrationTests
+{
+    using IntegrationTests.Containers;
+    using Xunit;
+
+    [CollectionDefinition("SUT")]
+    public class TestCollection : ICollectionFixture<WireMockContainerFixture>, ICollectionFixture<TestFixture>
+    {
+    }
+}

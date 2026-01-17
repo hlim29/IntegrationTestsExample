@@ -1,0 +1,19 @@
+{
+  "id" : "e2922bb1-7d05-3bdc-be63-ea054629fca8",
+  "request" : {
+    "url" : "/httpbin/xml",
+    "method" : "GET"
+  },
+  "response" : {
+    "status" : 200,
+    "bodyFileName" : "body-httpbin-xml-bbW5S.xml",
+    "headers" : {
+      "Date" : "Sat, 17 Jan 2026 00:44:09 GMT",
+      "Content-Type" : "application/xml",
+      "Server" : "gunicorn/19.9.0",
+      "Access-Control-Allow-Origin" : "*",
+      "Access-Control-Allow-Credentials" : "true"
+    }
+  },
+  "uuid" : "e2922bb1-7d05-3bdc-be63-ea054629fca8"
+}
