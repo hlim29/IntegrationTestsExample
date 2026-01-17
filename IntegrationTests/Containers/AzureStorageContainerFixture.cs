@@ -7,9 +7,8 @@ namespace IntegrationTests.Containers
 {
     public sealed class AzureStorageContainerFixture : ContainerFixture<IContainer>
     {
-        public override int Port { get; protected set; }
-        public string ConnectionString => $"";
-        private static ushort AzuritePort => 10000;
+        public override int[] Ports { get; protected set; }
+        private static int[] AzuritePorts => [10000, 10001, 10002];
 
         public AzureStorageContainerFixture()
             : base(new AzuriteBuilder("mcr.microsoft.com/azure-storage/azurite:3.23.0")
@@ -20,7 +19,7 @@ namespace IntegrationTests.Containers
         public override async Task InitializeAsync()
         {
             await base.InitializeAsync();
-            Port = Container.GetMappedPublicPort(AzuritePort);
+            Ports = [.. AzuritePorts.Select(x => (int)Container.GetMappedPublicPort(x))];
         }
     }
 }

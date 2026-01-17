@@ -6,8 +6,8 @@ namespace IntegrationTests.Containers
 {
     public sealed class MsSqlContainerFixture : ContainerFixture<IContainer>
     {
-        public override int Port { get; protected set; }
-        public string ConnectionString => $"server=localhost,{Port};user id={MsSqlBuilder.DefaultUsername};password={MsSqlBuilder.DefaultPassword};database={MsSqlBuilder.DefaultDatabase}";
+        public override int[] Ports { get; protected set; }
+        public string ConnectionString => $"server=localhost,{Ports.First()};user id={MsSqlBuilder.DefaultUsername};password={MsSqlBuilder.DefaultPassword};database={MsSqlBuilder.DefaultDatabase}";
         private static ushort MsSqlPort => 1433;
 
         public MsSqlContainerFixture()
@@ -20,7 +20,7 @@ namespace IntegrationTests.Containers
         public override async Task InitializeAsync()
         {
             await base.InitializeAsync();
-            Port = Container.GetMappedPublicPort(MsSqlPort);
+            Ports = [.. new int[] { MsSqlPort }.Select(x => (int)Container.GetMappedPublicPort(x))];
         }
     }
 }

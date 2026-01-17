@@ -6,7 +6,7 @@ namespace IntegrationTests.Containers
         where TContainer : IContainer
     {
         protected TContainer Container { get; }
-        public abstract int Port { get; protected set;  }
+        public abstract int[] Ports { get; protected set;  }
 
         protected ContainerFixture(TContainer container)
         {

@@ -5,8 +5,8 @@ namespace IntegrationTests.Containers
     public sealed class WireMockContainerFixture : ContainerFixture<IContainer>
     {
         private static ushort WireMockPort => 8080;
-        public override int Port { get; protected set; }
-        public string BaseUrl => $"http://localhost:{Port}";
+        public override int[] Ports { get; protected set; }
+        public string BaseUrl => $"http://localhost:{Ports.First()}";
 
         public WireMockContainerFixture()
             : base(new ContainerBuilder("wiremock/wiremock:3.13.2")
@@ -25,7 +25,7 @@ namespace IntegrationTests.Containers
         public override async Task InitializeAsync()
         {
             await base.InitializeAsync();
-            Port = Container.GetMappedPublicPort(WireMockPort);
+            Ports = [.. new int[] { WireMockPort }.Select(x => (int)Container.GetMappedPublicPort(x))];
         }
     }
 }

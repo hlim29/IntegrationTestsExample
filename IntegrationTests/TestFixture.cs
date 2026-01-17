@@ -3,8 +3,6 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
-using System.Data;
-using System.Data.Common;
 
 namespace IntegrationTests
 {
@@ -54,18 +52,8 @@ namespace IntegrationTests
             });
         }
 
-        public async Task InitializeAsync()
-        {
-            await _msSql.InitializeAsync();
-            await _azureStorage.InitializeAsync();
-            await _wireMock.InitializeAsync();
-        }
+        public Task InitializeAsync() => Task.CompletedTask;
 
-        async Task IAsyncLifetime.DisposeAsync()
-        {
-            await _msSql.DisposeAsync();
-            await _azureStorage.DisposeAsync();
-            await _wireMock.DisposeAsync();
-        }
+        Task IAsyncLifetime.DisposeAsync() => Task.CompletedTask;
     }
 }

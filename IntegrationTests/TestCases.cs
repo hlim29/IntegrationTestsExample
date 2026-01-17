@@ -1,7 +1,7 @@
 namespace IntegrationTests
 {
     [Collection("SUT")]
-    public class TestCases
+    public class TestCases : IClassFixture<TestFixture>
     {
         private readonly HttpClient _client;
 
