@@ -11,7 +11,7 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddSingleton<IJsonService, JsonService>();
 builder.Services.AddHttpClient<IJsonService, JsonService>(client =>
 {
-    client.BaseAddress = new Uri(builder.Configuration["httpbin:baseAddress"]);
+    client.BaseAddress = new Uri(builder.Configuration["httpbin:baseAddress"] ?? throw new ArgumentNullException("http bin base address is missing"));
     client.DefaultRequestHeaders.Add("Accept", "application/json");
 });
 

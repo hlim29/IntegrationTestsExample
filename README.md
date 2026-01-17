@@ -7,7 +7,7 @@ A sample repository demonstrating how to set up integration tests for .NET 8 app
 This project showcases a modern approach to integration testing in .NET by combining:
 
 - **WireMock** - For mocking external HTTP dependencies
-- **Testcontainers** - For running WireMock in Docker containers during tests
+- **Testcontainers** - For running WireMock and MS SQL Server in Docker containers during tests
 - **xUnit** - As the testing framework
 - **WebApplicationFactory** - For testing ASP.NET Core applications
 
@@ -23,7 +23,8 @@ This project showcases a modern approach to integration testing in .NET by combi
 └── IntegrationTests/                 # Integration test project
     ├── Containers/
     │   ├── ContainerFixture.cs       # Base container fixture
-    │   └── WireMockContainerFixture.cs # WireMock container setup
+    │   ├── WireMockContainerFixture.cs # WireMock container setup
+    │   └── MsSqlContainerFixture.cs  # MS SQL Server container setup
     ├── Mocks/
     │   ├── mappings/                 # WireMock request/response mappings
     │   └── __files/                  # WireMock response files
@@ -40,9 +41,16 @@ This project showcases a modern approach to integration testing in .NET by combi
 - Mounts local mock definitions from `Mocks/` directory
 - Includes health check wait strategy
 
+### MS SQL Server Container Setup
+- Uses MS SQL Server 2025 Docker image
+- Automatically binds to available port
+- Includes database availability wait strategy
+- Exposes connection string for test use
+
 ### Test Fixture Architecture
 - `ContainerFixture<TContainer>` - Generic base class for managing container lifecycle
 - `WireMockContainerFixture` - Configures and manages WireMock container
+- `MsSqlContainerFixture` - Configures and manages MS SQL Server container
 - `TestFixture` - Configures the System Under Test (SUT) with mocked dependencies
 
 ### Integration with ASP.NET Core
@@ -81,6 +89,8 @@ dotnet test
 
 ```xml
 <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="8.0.23" />
+<PackageReference Include="Microsoft.Data.SqlClient" Version="6.1.4" />
+<PackageReference Include="Testcontainers.MsSql" Version="4.10.0" />
 <PackageReference Include="WireMock.Net" Version="1.23.0" />
 <PackageReference Include="WireMock.Net.Testcontainers" Version="1.23.0" />
 <PackageReference Include="xunit" Version="2.5.3" />
@@ -139,18 +149,25 @@ builder.ConfigureAppConfiguration((_, config) =>
 {
     config.AddInMemoryCollection(new Dictionary<string, string?>
     {
-        ["httpbin:baseAddress"] = $"http://localhost:{_wireMock.Port}/httpbin/"
+        ["httpbin:baseAddress"] = $"{_wireMock.BaseUrl}/httpbin/"
     });
 });
 ```
 
+The MS SQL Server container provides a connection string that can be used in your tests:
+
+```csharp
+string connectionString = _msSql.ConnectionString;
+// Use this connection string to configure your database context or services
+```
+
 ## How It Works
 
-1. **Container Initialization**: When tests start, the `WireMockContainerFixture` creates and starts a WireMock container
-2. **Port Mapping**: The container's internal port 8080 is mapped to a random available host port
+1. **Container Initialization**: When tests start, both the `WireMockContainerFixture` and `MsSqlContainerFixture` create and start their respective containers
+2. **Port Mapping**: Each container's internal port is mapped to a random available host port
 3. **Configuration Override**: The `TestFixture` injects the WireMock URL into the application configuration
-4. **Test Execution**: Tests interact with the ASP.NET Core application, which makes HTTP calls to WireMock
-5. **Cleanup**: After tests complete, containers are automatically stopped and disposed
+4. **Test Execution**: Tests interact with the ASP.NET Core application, which makes HTTP calls to WireMock and can use the SQL Server database
+5. **Cleanup**: After tests complete, all containers are automatically stopped and disposed
 
 ## Benefits of This Approach
 
@@ -189,18 +206,43 @@ The `TestCollection` class uses xUnit's collection fixtures to share containers 
 
 ```csharp
 [CollectionDefinition("SUT")]
-public class TestCollection : ICollectionFixture<WireMockContainerFixture>, ICollectionFixture<TestFixture>
+public class TestCollection : ICollectionFixture<WireMockContainerFixture>, ICollectionFixture<MsSqlContainerFixture>, ICollectionFixture<TestFixture>
 {
 }
 ```
 
 ## Extending This Pattern
 
-You can easily extend this pattern to add more containers (databases, message queues, etc.):
+You can easily extend this pattern to add more containers (databases, message queues, , etc.):
 
 1. Create a new fixture class inheriting from `ContainerFixture<TContainer>`
 2. Add it to the `TestCollection` as another `ICollectionFixture<T>`
 3. Inject it into your `TestFixture` to configure the application
+
+Example of the MS SQL Server container fixture:
+
+```csharp
+public sealed class MsSqlContainerFixture : ContainerFixture<IContainer>
+{
+    public override int Port { get; protected set; }
+    
+    public string ConnectionString => 
+        $"server=localhost,{Port};user id={MsSqlBuilder.DefaultUsername};password={MsSqlBuilder.DefaultPassword};database={MsSqlBuilder.DefaultDatabase}";
+
+    public MsSqlContainerFixture()
+        : base(new MsSqlBuilder("mcr.microsoft.com/mssql/server:2025-latest")
+              .WithWaitStrategy(Wait.ForUnixContainer().UntilDatabaseIsAvailable(SqlClientFactory.Instance))
+              .Build())
+    {
+    }
+
+    public override async Task InitializeAsync()
+    {
+        await base.InitializeAsync();
+        Port = Container.GetMappedPublicPort(1433);
+    }
+}
+```
 
 ## Troubleshooting
 
@@ -214,7 +256,8 @@ You can easily extend this pattern to add more containers (databases, message qu
 
 ### Container Startup Timeout
 - WireMock container includes a health check that waits for the admin API to be available
-- If tests fail due to timeout, check Docker logs for the WireMock container
+- MS SQL Server container includes a wait strategy that ensures the database is ready before tests run
+- If tests fail due to timeout, check Docker logs for the respective containers
 
 ## License
 
