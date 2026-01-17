@@ -12,11 +12,16 @@ namespace IntegrationTests
     {
         private readonly WireMockContainerFixture _wireMock;
         private readonly MsSqlContainerFixture _msSql;
+        private readonly AzureStorageContainerFixture _azureStorage;
 
-        public TestFixture()
+        public TestFixture(
+            WireMockContainerFixture wireMock,
+            MsSqlContainerFixture msSql,
+            AzureStorageContainerFixture azureStorage)
         {
-            _wireMock = new WireMockContainerFixture();
-            _msSql = new MsSqlContainerFixture();
+            _wireMock = wireMock;
+            _msSql = msSql;
+            _azureStorage = azureStorage;
         }
 
         protected override IHost CreateHost(IHostBuilder builder)
@@ -52,12 +57,14 @@ namespace IntegrationTests
         public async Task InitializeAsync()
         {
             await _msSql.InitializeAsync();
+            await _azureStorage.InitializeAsync();
             await _wireMock.InitializeAsync();
         }
 
         async Task IAsyncLifetime.DisposeAsync()
         {
             await _msSql.DisposeAsync();
+            await _azureStorage.DisposeAsync();
             await _wireMock.DisposeAsync();
         }
     }
