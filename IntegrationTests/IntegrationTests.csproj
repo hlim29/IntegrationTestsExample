@@ -60,4 +60,10 @@
     </None>
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="Sql\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

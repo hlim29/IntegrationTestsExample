@@ -7,7 +7,7 @@ namespace IntegrationTests.Containers
     public sealed class MsSqlContainerFixture : ContainerFixture<IContainer>
     {
         public override int[] Ports { get; protected set; }
-        public string ConnectionString => $"server=localhost,{Ports.First()};user id={MsSqlBuilder.DefaultUsername};password={MsSqlBuilder.DefaultPassword};database={MsSqlBuilder.DefaultDatabase}";
+        public string ConnectionString => $"server=localhost,{Ports.First()};user id={MsSqlBuilder.DefaultUsername};password={MsSqlBuilder.DefaultPassword};database={MsSqlBuilder.DefaultDatabase};TrustServerCertificate=true";
         private static ushort MsSqlPort => 1433;
 
         public MsSqlContainerFixture()

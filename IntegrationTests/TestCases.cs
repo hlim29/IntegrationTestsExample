@@ -1,6 +1,5 @@
-using Azure.Storage.Blobs;
+using Microsoft.Data.SqlClient;
 using System.Runtime.InteropServices;
-using Testcontainers.Azurite;
 
 namespace IntegrationTests
 {
@@ -41,6 +40,20 @@ namespace IntegrationTests
             await blob.UploadAsync(BinaryData.FromString($"Hello from .NET on {RuntimeInformation.OSDescription}"), overwrite: true);
 
             Assert.True(await blob.ExistsAsync());
+        }
+
+        [Fact]
+        public async Task MsSql_tests()
+        {
+            var sql = _testFixture.MsSql;
+            await sql.ExecuteSqlFileAsync("Sql/CreateUsers.sql");
+
+            await using var connection = new SqlConnection(sql.ConnectionString);
+            await connection.OpenAsync();
+
+            await using var countCommand = new SqlCommand("SELECT COUNT(*) FROM dbo.Users", connection);
+            var rowCount = (int)await countCommand.ExecuteScalarAsync();
+            Assert.Equal(5, rowCount);
         }
     }
 }
