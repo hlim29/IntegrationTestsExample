@@ -22,5 +22,25 @@ namespace IntegrationTests.Containers
             await base.InitializeAsync();
             Ports = [.. new int[] { MsSqlPort }.Select(x => (int)Container.GetMappedPublicPort(x))];
         }
+
+        public async Task ExecuteSqlAsync(string sql)
+        {
+            await using var connection = new SqlConnection(ConnectionString);
+            await connection.OpenAsync();
+            await using var command = new SqlCommand(sql, connection);
+            await command.ExecuteNonQueryAsync();
+        }
+
+        /// <summary>
+        /// Executes SQL from a file against the MS SQL container.
+        /// await _msSql.ExecuteSqlFileAsync("Scripts/CreateTables.sql");
+        /// </summary>
+        /// <param name="filePath"></param>
+        /// <returns></returns>
+        public async Task ExecuteSqlFileAsync(string filePath)
+        {
+            var sql = await File.ReadAllTextAsync(filePath);
+            await ExecuteSqlAsync(sql);
+        }
     }
 }

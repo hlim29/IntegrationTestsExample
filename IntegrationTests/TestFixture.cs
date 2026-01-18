@@ -8,18 +8,18 @@ namespace IntegrationTests
 {
     public sealed class TestFixture : WebApplicationFactory<Program>, IAsyncLifetime
     {
-        private readonly WireMockContainerFixture _wireMock;
-        private readonly MsSqlContainerFixture _msSql;
-        private readonly AzureStorageContainerFixture _azureStorage;
+        public WireMockContainerFixture WireMock { get; private set; }
+        public MsSqlContainerFixture MsSql { get; private set; }
+        public AzureStorageContainerFixture AzureStorage { get; private set; }
 
         public TestFixture(
             WireMockContainerFixture wireMock,
             MsSqlContainerFixture msSql,
             AzureStorageContainerFixture azureStorage)
         {
-            _wireMock = wireMock;
-            _msSql = msSql;
-            _azureStorage = azureStorage;
+            WireMock = wireMock;
+            MsSql = msSql;
+            AzureStorage = azureStorage;
         }
 
         protected override IHost CreateHost(IHostBuilder builder)
@@ -33,9 +33,15 @@ namespace IntegrationTests
         {
             builder.ConfigureAppConfiguration((_, config) =>
             {
+                // Add the IntegrationTests appsettings file
+                config.AddJsonFile(
+                    Path.Combine(AppContext.BaseDirectory, "appsettings.IntegrationTests.json"),
+                    optional: false,
+                    reloadOnChange: false);
+
                 config.AddInMemoryCollection(new Dictionary<string, string?>
                 {
-                    ["httpbin:baseAddress"] = $"{_wireMock.BaseUrl}/httpbin/"
+                    ["httpbin:baseAddress"] = $"{WireMock.BaseUrl}/httpbin/"
                 });
             });
 
@@ -57,3 +63,4 @@ namespace IntegrationTests
         Task IAsyncLifetime.DisposeAsync() => Task.CompletedTask;
     }
 }
+
