@@ -1,13 +1,13 @@
 # .NET Integration Tests with WireMock and Testcontainers
 
-A sample repository demonstrating how to set up integration tests for .NET 8 applications using WireMock and Testcontainers.
+A sample repository demonstrating how to set up integration tests for .NET 8 applications using WireMock, Testcontainers, and Azure Storage emulation.
 
 ## Overview
 
 This project showcases a modern approach to integration testing in .NET by combining:
 
 - **WireMock** - For mocking external HTTP dependencies
-- **Testcontainers** - For running WireMock and MS SQL Server in Docker containers during tests
+- **Testcontainers** - For running WireMock, MS SQL Server, and Azurite in Docker containers during tests
 - **xUnit** - As the testing framework
 - **WebApplicationFactory** - For testing ASP.NET Core applications
 
@@ -21,16 +21,20 @@ This project showcases a modern approach to integration testing in .NET by combi
 │   └── Program.cs                    # Application entry point
 │
 └── IntegrationTests/                 # Integration test project
-    ├── Containers/
-    │   ├── ContainerFixture.cs       # Base container fixture
-    │   ├── WireMockContainerFixture.cs # WireMock container setup
-    │   └── MsSqlContainerFixture.cs  # MS SQL Server container setup
-    ├── Mocks/
-    │   ├── mappings/                 # WireMock request/response mappings
-    │   └── __files/                  # WireMock response files
-    ├── TestFixture.cs                # Test application factory
-    ├── TestCollection.cs             # xUnit collection definition
-    └── TestCases.cs                  # Sample test cases
+├── Containers/
+│   ├── ContainerFixture.cs       # Base container fixture
+│   ├── WireMockContainerFixture.cs # WireMock container setup
+│   ├── MsSqlContainerFixture.cs  # MS SQL Server container setup
+│   └── AzureStorageContainerFixture.cs # Azure Storage (Azurite) container setup
+├── Mocks/
+│   ├── mappings/                 # WireMock request/response mappings
+│   └── __files/                  # WireMock response files
+├── Sql/
+│   └── CreateUsers.sql           # Sample SQL scripts for testing
+├── TestFixture.cs                # Test application factory
+├── TestCollection.cs             # xUnit collection definition
+├── TestCases.cs                  # Sample test cases
+└── appsettings.IntegrationTests.json # Integration test configuration
 ```
 
 ## Key Features
@@ -46,16 +50,26 @@ This project showcases a modern approach to integration testing in .NET by combi
 - Automatically binds to available port
 - Includes database availability wait strategy
 - Exposes connection string for test use
+- Helper methods to execute SQL scripts and commands
+
+### Azure Storage Container Setup
+- Uses Azurite Docker image (v3.35.0) for Azure Storage emulation
+- Emulates Blob, Queue, and Table storage
+- Automatically binds to available ports (10000-10002)
+- Provides BlobServiceClient for easy interaction
+- Includes helper methods to create blob containers
 
 ### Test Fixture Architecture
 - `ContainerFixture<TContainer>` - Generic base class for managing container lifecycle
 - `WireMockContainerFixture` - Configures and manages WireMock container
 - `MsSqlContainerFixture` - Configures and manages MS SQL Server container
+- `AzureStorageContainerFixture` - Configures and manages Azurite container
 - `TestFixture` - Configures the System Under Test (SUT) with mocked dependencies
 
 ### Integration with ASP.NET Core
 - Uses `WebApplicationFactory<Program>` for in-memory test server
 - Configures application to use integration test environment
+- Loads custom configuration from `appsettings.IntegrationTests.json`
 - Overrides configuration to point to WireMock container
 
 ## Prerequisites
@@ -68,28 +82,30 @@ This project showcases a modern approach to integration testing in .NET by combi
 
 ### 1. Clone the Repository
 
-```sh
+```
 git clone https://github.com/hlim29/IntegrationTestsExample
 cd IntegrationTests
 ```
 
 ### 2. Restore Dependencies
 
-```sh
+```
 dotnet restore
 ```
 
 ### 3. Run the Tests
 
-```sh
+```
 dotnet test
 ```
 
 ## Key Dependencies
 
-```xml
+```
+<PackageReference Include="Azure.Storage.Blobs" Version="12.24.0" />
 <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="8.0.23" />
 <PackageReference Include="Microsoft.Data.SqlClient" Version="6.1.4" />
+<PackageReference Include="Testcontainers.Azurite" Version="4.10.0" />
 <PackageReference Include="Testcontainers.MsSql" Version="4.10.0" />
 <PackageReference Include="WireMock.Net" Version="1.23.0" />
 <PackageReference Include="WireMock.Net.Testcontainers" Version="1.23.0" />
@@ -102,7 +118,7 @@ dotnet test
 Place WireMock mappings in `IntegrationTests/Mocks/mappings/` and response files in `IntegrationTests/Mocks/__files/`. These files are automatically copied to the output directory and mounted into the WireMock container.
 
 Example mapping structure:
-```json
+```
 {
   "request": {
     "method": "GET",
@@ -119,14 +135,16 @@ Example mapping structure:
 
 Tests use xUnit's `ICollectionFixture` to share the test fixtures across test classes:
 
-```csharp
+```
 [Collection("SUT")]
-public class TestCases
+public class TestCases : IClassFixture<TestFixture>
 {
+    private readonly TestFixture _testFixture;
     private readonly HttpClient _client;
 
     public TestCases(TestFixture testFixture)
     {
+        _testFixture = testFixture;
         _client = testFixture.CreateSutClient();
     }
 
@@ -137,57 +155,138 @@ public class TestCases
         res.EnsureSuccessStatusCode();
         Assert.True(res.StatusCode == System.Net.HttpStatusCode.OK);
     }
+
+    [Fact]
+    public async Task BlobStorage_tests()
+    {
+        var blobService = _testFixture.AzureStorage.BlobServiceClient;
+        var container = await blobService.CreateBlobContainerAsync("teststorage");
+
+        var blob = container.Value.GetBlobClient("test.txt");
+        await blob.UploadAsync(BinaryData.FromString("Hello from .NET"), overwrite: true);
+
+        Assert.True(await blob.ExistsAsync());
+    }
+
+    [Fact]
+    public async Task MsSql_tests()
+    {
+        var sql = _testFixture.MsSql;
+        await sql.ExecuteSqlFileAsync("Sql/CreateUsers.sql");
+
+        await using var connection = new SqlConnection(sql.ConnectionString);
+        await connection.OpenAsync();
+
+        await using var countCommand = new SqlCommand("SELECT COUNT(*) FROM dbo.Users", connection);
+        var rowCount = (int)await countCommand.ExecuteScalarAsync();
+        Assert.Equal(5, rowCount);
+    }
 }
 ```
 
 ## Configuration
 
-The test fixture dynamically configures the application to use the WireMock container:
+The test fixture dynamically configures the application to use the test containers:
 
-```csharp
-builder.ConfigureAppConfiguration((_, config) =>
+```
+public sealed class TestFixture : WebApplicationFactory<Program>, IAsyncLifetime
 {
-    config.AddInMemoryCollection(new Dictionary<string, string?>
+    public WireMockContainerFixture WireMock { get; private set; }
+    public MsSqlContainerFixture MsSql { get; private set; }
+    public AzureStorageContainerFixture AzureStorage { get; private set; }
+
+    public TestFixture(
+        WireMockContainerFixture wireMock,
+        MsSqlContainerFixture msSql,
+        AzureStorageContainerFixture azureStorage)
     {
-        ["httpbin:baseAddress"] = $"{_wireMock.BaseUrl}/httpbin/"
-    });
-});
+        WireMock = wireMock;
+        MsSql = msSql;
+        AzureStorage = azureStorage;
+    }
+
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        builder.ConfigureAppConfiguration((_, config) =>
+        {
+            config.AddJsonFile(
+                Path.Combine(AppContext.BaseDirectory, "appsettings.IntegrationTests.json"),
+                optional: false,
+                reloadOnChange: false);
+
+            config.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["httpbin:baseAddress"] = $"{WireMock.BaseUrl}/httpbin/"
+            });
+        });
+    }
+}
 ```
 
-The MS SQL Server container provides a connection string that can be used in your tests:
+### Working with MS SQL Server
 
-```csharp
-string connectionString = _msSql.ConnectionString;
-// Use this connection string to configure your database context or services
+The `MsSqlContainerFixture` provides helper methods for executing SQL:
+
+```
+// Execute SQL from a string
+await _msSql.ExecuteSqlAsync("CREATE TABLE Users (Id INT, Name NVARCHAR(100))");
+
+// Execute SQL from a file
+await _msSql.ExecuteSqlFileAsync("Sql/CreateUsers.sql");
+
+// Use the connection string directly
+await using var connection = new SqlConnection(_msSql.ConnectionString);
+await connection.OpenAsync();
+```
+
+### Working with Azure Storage
+
+The `AzureStorageContainerFixture` provides access to Azure Storage services:
+
+```
+// Get the BlobServiceClient
+var blobService = _testFixture.AzureStorage.BlobServiceClient;
+
+// Create a blob container
+var container = await blobService.CreateBlobContainerAsync("mycontainer");
+
+// Upload a blob
+var blob = container.Value.GetBlobClient("myfile.txt");
+await blob.UploadAsync(BinaryData.FromString("Hello World"), overwrite: true);
+
+// Use the connection string directly
+string connectionString = _testFixture.AzureStorage.ConnectionString;
 ```
 
 ## How It Works
 
-1. **Container Initialization**: When tests start, both the `WireMockContainerFixture` and `MsSqlContainerFixture` create and start their respective containers
-2. **Port Mapping**: Each container's internal port is mapped to a random available host port
-3. **Configuration Override**: The `TestFixture` injects the WireMock URL into the application configuration
-4. **Test Execution**: Tests interact with the ASP.NET Core application, which makes HTTP calls to WireMock and can use the SQL Server database
+1. **Container Initialisation**: When tests start, all container fixtures (`WireMockContainerFixture`, `MsSqlContainerFixture`, and `AzureStorageContainerFixture`) create and start their respective containers
+2. **Port Mapping**: Each container's internal port(s) are mapped to random available host ports
+3. **Configuration Override**: The `TestFixture` injects container URLs and connection strings into the application configuration
+4. **Test Execution**: Tests interact with the ASP.NET Core application, which makes HTTP calls to WireMock, connects to SQL Server, and uses Azure Storage
 5. **Cleanup**: After tests complete, all containers are automatically stopped and disposed
 
 ## Benefits of This Approach
 
-- ✅  **Isolated Tests** - Each test run uses a fresh container instance
+- ✅ **Isolated Tests** - Each test run uses fresh container instances
 - ✅ **Repeatable** - Tests produce consistent results across environments
 - ✅ **Fast** - Containers start quickly and run in parallel
-- ✅ **Realistic** - Tests against actual HTTP endpoints, not mocked interfaces
+- ✅ **Realistic** - Tests against actual services, not mocked interfaces
 - ✅ **Portable** - Works on any machine with Docker installed
 - ✅ **No Manual Setup** - No need to manually start/stop external services
+- ✅ **Complete Coverage** - Test HTTP dependencies, databases, and cloud storage in one solution
 
 ## Architecture Highlights
 
 ### Container Lifecycle Management
 The `ContainerFixture<TContainer>` base class implements `IAsyncLifetime` from xUnit, ensuring proper initialization and cleanup:
 
-```csharp
+```
 public abstract class ContainerFixture<TContainer> : IAsyncLifetime
     where TContainer : IContainer
 {
     protected TContainer Container { get; }
+    public abstract int[] Ports { get; protected set; }
 
     public virtual async Task InitializeAsync()
     {
@@ -204,30 +303,61 @@ public abstract class ContainerFixture<TContainer> : IAsyncLifetime
 ### Test Collection Sharing
 The `TestCollection` class uses xUnit's collection fixtures to share containers across multiple test classes, improving performance:
 
-```csharp
+```
 [CollectionDefinition("SUT")]
-public class TestCollection : ICollectionFixture<WireMockContainerFixture>, ICollectionFixture<MsSqlContainerFixture>, ICollectionFixture<TestFixture>
+public class TestCollection : ICollectionFixture<WireMockContainerFixture>, 
+    ICollectionFixture<MsSqlContainerFixture>, 
+    ICollectionFixture<AzureStorageContainerFixture>
 {
 }
 ```
 
 ## Extending This Pattern
 
-You can easily extend this pattern to add more containers (databases, message queues, , etc.):
+You can easily extend this pattern to add more containers (Redis, RabbitMQ, MongoDB, etc.):
 
 1. Create a new fixture class inheriting from `ContainerFixture<TContainer>`
 2. Add it to the `TestCollection` as another `ICollectionFixture<T>`
 3. Inject it into your `TestFixture` to configure the application
 
-Example of the MS SQL Server container fixture:
+Example of the Azure Storage container fixture:
 
-```csharp
+```
+public sealed class AzureStorageContainerFixture : ContainerFixture<IContainer>
+{
+    public override int[] Ports { get; protected set; }
+    public BlobServiceClient BlobServiceClient => new BlobServiceClient(ConnectionString);
+    private static int[] AzuritePorts => [10000, 10001, 10002];
+    private const string AccountName = "devstoreaccount1";
+    private const string AccountKey = "Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==";
+
+    public string ConnectionString => $"DefaultEndpointsProtocol=http;AccountName={AccountName};AccountKey={AccountKey};BlobEndpoint=http://127.0.0.1:{Ports[0]}/{AccountName};QueueEndpoint=http://127.0.0.1:{Ports[1]}/{AccountName};TableEndpoint=http://127.0.0.1:{Ports[2]}/{AccountName};";
+
+    public AzureStorageContainerFixture()
+        : base(new AzuriteBuilder("mcr.microsoft.com/azure-storage/azurite:3.35.0")
+              .WithCommand("azurite", "--oauth", "basic", "--skipApiVersionCheck")
+              .WithEnvironment("AZURITE_ACCOUNTS", $"{AccountName}:{AccountKey}")
+              .Build())
+    {
+    }
+
+    public override async Task InitializeAsync()
+    {
+        await base.InitializeAsync();
+        Ports = [.. AzuritePorts.Select(x => (int)Container.GetMappedPublicPort(x))];
+    }
+}
+```
+
+Example of the MS SQL Server container fixture with helper methods:
+
+```
 public sealed class MsSqlContainerFixture : ContainerFixture<IContainer>
 {
-    public override int Port { get; protected set; }
+    public override int[] Ports { get; protected set; }
     
     public string ConnectionString => 
-        $"server=localhost,{Port};user id={MsSqlBuilder.DefaultUsername};password={MsSqlBuilder.DefaultPassword};database={MsSqlBuilder.DefaultDatabase}";
+        $"server=localhost,{Ports.First()};user id={MsSqlBuilder.DefaultUsername};password={MsSqlBuilder.DefaultPassword};database={MsSqlBuilder.DefaultDatabase};TrustServerCertificate=true";
 
     public MsSqlContainerFixture()
         : base(new MsSqlBuilder("mcr.microsoft.com/mssql/server:2025-latest")
@@ -239,7 +369,21 @@ public sealed class MsSqlContainerFixture : ContainerFixture<IContainer>
     public override async Task InitializeAsync()
     {
         await base.InitializeAsync();
-        Port = Container.GetMappedPublicPort(1433);
+        Ports = [.. new int[] { 1433 }.Select(x => (int)Container.GetMappedPublicPort(x))];
+    }
+
+    public async Task ExecuteSqlAsync(string sql)
+    {
+        await using var connection = new SqlConnection(ConnectionString);
+        await connection.OpenAsync();
+        await using var command = new SqlCommand(sql, connection);
+        await command.ExecuteNonQueryAsync();
+    }
+
+    public async Task ExecuteSqlFileAsync(string filePath)
+    {
+        var sql = await File.ReadAllTextAsync(filePath);
+        await ExecuteSqlAsync(sql);
     }
 }
 ```
@@ -257,6 +401,7 @@ public sealed class MsSqlContainerFixture : ContainerFixture<IContainer>
 ### Container Startup Timeout
 - WireMock container includes a health check that waits for the admin API to be available
 - MS SQL Server container includes a wait strategy that ensures the database is ready before tests run
+- Azurite container starts quickly and is ready immediately
 - If tests fail due to timeout, check Docker logs for the respective containers
 
 ## License
