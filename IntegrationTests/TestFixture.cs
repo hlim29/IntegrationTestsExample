@@ -11,15 +11,18 @@ namespace IntegrationTests
         public WireMockContainerFixture WireMock { get; private set; }
         public MsSqlContainerFixture MsSql { get; private set; }
         public AzureStorageContainerFixture AzureStorage { get; private set; }
+        public CosmosDbContainerFixture CosmosDb { get; private set; }
 
         public TestFixture(
             WireMockContainerFixture wireMock,
             MsSqlContainerFixture msSql,
-            AzureStorageContainerFixture azureStorage)
+            AzureStorageContainerFixture azureStorage,
+            CosmosDbContainerFixture cosmosDb)
         {
             WireMock = wireMock;
             MsSql = msSql;
             AzureStorage = azureStorage;
+            CosmosDb = cosmosDb;
         }
 
         protected override IHost CreateHost(IHostBuilder builder)

@@ -27,9 +27,11 @@
     <PackageReference Include="Azure.Storage.Blobs" Version="12.26.0" />
     <PackageReference Include="coverlet.collector" Version="6.0.0" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="8.0.23" />
+    <PackageReference Include="Microsoft.Azure.Cosmos" Version="3.56.0" />
     <PackageReference Include="Microsoft.Data.SqlClient" Version="6.1.4" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
     <PackageReference Include="Testcontainers.Azurite" Version="4.10.0" />
+    <PackageReference Include="Testcontainers.CosmosDb" Version="4.10.0" />
     <PackageReference Include="Testcontainers.MsSql" Version="4.10.0" />
     <PackageReference Include="WireMock.Net" Version="1.23.0" />
     <PackageReference Include="WireMock.Net.Testcontainers" Version="1.23.0" />

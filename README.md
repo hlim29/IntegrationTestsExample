@@ -1,13 +1,13 @@
 # .NET Integration Tests with WireMock and Testcontainers
 
-A sample repository demonstrating how to set up integration tests for .NET 8 applications using WireMock, Testcontainers, and Azure Storage emulation.
+A sample repository demonstrating how to set up integration tests for .NET 8 applications using WireMock, Testcontainers, Azure Storage emulation, and Cosmos DB emulation.
 
 ## Overview
 
 This project showcases a modern approach to integration testing in .NET by combining:
 
 - **WireMock** - For mocking external HTTP dependencies
-- **Testcontainers** - For running WireMock, MS SQL Server, and Azurite in Docker containers during tests
+- **Testcontainers** - For running WireMock, MS SQL Server, Azurite, and Cosmos DB in Docker containers during tests
 - **xUnit** - As the testing framework
 - **WebApplicationFactory** - For testing ASP.NET Core applications
 
@@ -25,7 +25,8 @@ This project showcases a modern approach to integration testing in .NET by combi
 │   ├── ContainerFixture.cs       # Base container fixture
 │   ├── WireMockContainerFixture.cs # WireMock container setup
 │   ├── MsSqlContainerFixture.cs  # MS SQL Server container setup
-│   └── AzureStorageContainerFixture.cs # Azure Storage (Azurite) container setup
+│   ├── AzureStorageContainerFixture.cs # Azure Storage (Azurite) container setup
+│   └── CosmosDbContainerFixture.cs # Cosmos DB container setup
 ├── Mocks/
 │   ├── mappings/                 # WireMock request/response mappings
 │   └── __files/                  # WireMock response files
@@ -59,11 +60,19 @@ This project showcases a modern approach to integration testing in .NET by combi
 - Provides BlobServiceClient for easy interaction
 - Includes helper methods to create blob containers
 
+### Cosmos DB Container Setup
+- Uses Cosmos DB Emulator Docker image (latest)
+- Automatically binds to available port (8081)
+- Provides connection string for test use
+- Includes HttpClient configured for the emulator
+- Supports Gateway connection mode for testing
+
 ### Test Fixture Architecture
 - `ContainerFixture<TContainer>` - Generic base class for managing container lifecycle
 - `WireMockContainerFixture` - Configures and manages WireMock container
 - `MsSqlContainerFixture` - Configures and manages MS SQL Server container
 - `AzureStorageContainerFixture` - Configures and manages Azurite container
+- `CosmosDbContainerFixture` - Configures and manages Cosmos DB Emulator container
 - `TestFixture` - Configures the System Under Test (SUT) with mocked dependencies
 
 ### Integration with ASP.NET Core
@@ -104,8 +113,10 @@ dotnet test
 ```
 <PackageReference Include="Azure.Storage.Blobs" Version="12.24.0" />
 <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="8.0.23" />
+<PackageReference Include="Microsoft.Azure.Cosmos" Version="3.46.0" />
 <PackageReference Include="Microsoft.Data.SqlClient" Version="6.1.4" />
 <PackageReference Include="Testcontainers.Azurite" Version="4.10.0" />
+<PackageReference Include="Testcontainers.CosmosDb" Version="4.10.0" />
 <PackageReference Include="Testcontainers.MsSql" Version="4.10.0" />
 <PackageReference Include="WireMock.Net" Version="1.23.0" />
 <PackageReference Include="WireMock.Net.Testcontainers" Version="1.23.0" />
@@ -181,6 +192,29 @@ public class TestCases : IClassFixture<TestFixture>
         var rowCount = (int)await countCommand.ExecuteScalarAsync();
         Assert.Equal(5, rowCount);
     }
+
+    [Fact]
+    public async Task CosmosDb_tests()
+    {
+        var clientOptions = new CosmosClientOptions
+        {
+            ConnectionMode = ConnectionMode.Gateway,
+            HttpClientFactory = () => _testFixture.CosmosDb.HttpClient
+        };
+
+        using var cosmosClient = new CosmosClient(
+            _testFixture.CosmosDb.ConnectionString, 
+            clientOptions);
+
+        string databaseName = "TestDatabase";
+        string containerName = "TestContainer";
+        await cosmosClient.CreateDatabaseIfNotExistsAsync(databaseName);
+        var database = cosmosClient.GetDatabase(databaseName);
+
+        await database.CreateContainerIfNotExistsAsync(containerName, "/id");
+        var container = database.GetContainer(containerName);
+        Assert.Equal("TestContainer", container.Id);
+    }
 }
 ```
 
@@ -194,15 +228,18 @@ public sealed class TestFixture : WebApplicationFactory<Program>, IAsyncLifetime
     public WireMockContainerFixture WireMock { get; private set; }
     public MsSqlContainerFixture MsSql { get; private set; }
     public AzureStorageContainerFixture AzureStorage { get; private set; }
+    public CosmosDbContainerFixture CosmosDb { get; private set; }
 
     public TestFixture(
         WireMockContainerFixture wireMock,
         MsSqlContainerFixture msSql,
-        AzureStorageContainerFixture azureStorage)
+        AzureStorageContainerFixture azureStorage,
+        CosmosDbContainerFixture cosmosDb)
     {
         WireMock = wireMock;
         MsSql = msSql;
         AzureStorage = azureStorage;
+        CosmosDb = cosmosDb;
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -258,12 +295,38 @@ await blob.UploadAsync(BinaryData.FromString("Hello World"), overwrite: true);
 string connectionString = _testFixture.AzureStorage.ConnectionString;
 ```
 
+### Working with Cosmos DB
+
+The `CosmosDbContainerFixture` provides access to Cosmos DB emulator:
+
+```
+// Configure Cosmos Client for the emulator
+var clientOptions = new CosmosClientOptions
+{
+    ConnectionMode = ConnectionMode.Gateway,
+    HttpClientFactory = () => _testFixture.CosmosDb.HttpClient
+};
+
+// Create Cosmos Client
+using var cosmosClient = new CosmosClient(
+    _testFixture.CosmosDb.ConnectionString, 
+    clientOptions);
+
+// Create database and container
+await cosmosClient.CreateDatabaseIfNotExistsAsync("TestDatabase");
+var database = cosmosClient.GetDatabase("TestDatabase");
+await database.CreateContainerIfNotExistsAsync("TestContainer", "/id");
+
+// Work with the container
+var container = database.GetContainer("TestContainer");
+```
+
 ## How It Works
 
-1. **Container Initialisation**: When tests start, all container fixtures (`WireMockContainerFixture`, `MsSqlContainerFixture`, and `AzureStorageContainerFixture`) create and start their respective containers
+1. **Container Initialisation**: When tests start, all container fixtures (`WireMockContainerFixture`, `MsSqlContainerFixture`, `AzureStorageContainerFixture`, and `CosmosDbContainerFixture`) create and start their respective containers
 2. **Port Mapping**: Each container's internal port(s) are mapped to random available host ports
 3. **Configuration Override**: The `TestFixture` injects container URLs and connection strings into the application configuration
-4. **Test Execution**: Tests interact with the ASP.NET Core application, which makes HTTP calls to WireMock, connects to SQL Server, and uses Azure Storage
+4. **Test Execution**: Tests interact with the ASP.NET Core application, which makes HTTP calls to WireMock, connects to SQL Server, uses Azure Storage, and accesses Cosmos DB
 5. **Cleanup**: After tests complete, all containers are automatically stopped and disposed
 
 ## Benefits of This Approach
@@ -274,7 +337,7 @@ string connectionString = _testFixture.AzureStorage.ConnectionString;
 - ✅ **Realistic** - Tests against actual services, not mocked interfaces
 - ✅ **Portable** - Works on any machine with Docker installed
 - ✅ **No Manual Setup** - No need to manually start/stop external services
-- ✅ **Complete Coverage** - Test HTTP dependencies, databases, and cloud storage in one solution
+- ✅ **Complete Coverage** - Test HTTP dependencies, databases, cloud storage, and NoSQL databases in one solution
 
 ## Architecture Highlights
 
@@ -307,7 +370,8 @@ The `TestCollection` class uses xUnit's collection fixtures to share containers 
 [CollectionDefinition("SUT")]
 public class TestCollection : ICollectionFixture<WireMockContainerFixture>, 
     ICollectionFixture<MsSqlContainerFixture>, 
-    ICollectionFixture<AzureStorageContainerFixture>
+    ICollectionFixture<AzureStorageContainerFixture>,
+    ICollectionFixture<CosmosDbContainerFixture>
 {
 }
 ```
@@ -345,6 +409,32 @@ public sealed class AzureStorageContainerFixture : ContainerFixture<IContainer>
     {
         await base.InitializeAsync();
         Ports = [.. AzuritePorts.Select(x => (int)Container.GetMappedPublicPort(x))];
+    }
+}
+```
+
+Example of the Cosmos DB container fixture:
+
+```
+public sealed class CosmosDbContainerFixture : ContainerFixture<CosmosDbContainer>
+{
+    public override int[] Ports { get; protected set; } 
+    public HttpClient HttpClient => Container.HttpClient;
+    public string ConnectionString { get; private set; }
+    private static ushort CosmosPort => 8081;
+
+    public CosmosDbContainerFixture()
+        : base(new CosmosDbBuilder("mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:latest")
+              .WithEnvironment("AZURE_COSMOS_EMULATOR_PARTITION_COUNT", "3")
+              .Build())
+    {
+    }
+
+    public override async Task InitializeAsync()
+    {
+        await base.InitializeAsync();
+        ConnectionString = Container.GetConnectionString();
+        Ports = [.. new int[] {CosmosPort}.Select(x => (int)Container.GetMappedPublicPort(x))];
     }
 }
 ```
@@ -402,6 +492,7 @@ public sealed class MsSqlContainerFixture : ContainerFixture<IContainer>
 - WireMock container includes a health check that waits for the admin API to be available
 - MS SQL Server container includes a wait strategy that ensures the database is ready before tests run
 - Azurite container starts quickly and is ready immediately
+- Cosmos DB Emulator container may take longer to start on first run (downloads certificate)
 - If tests fail due to timeout, check Docker logs for the respective containers
 
 ## License

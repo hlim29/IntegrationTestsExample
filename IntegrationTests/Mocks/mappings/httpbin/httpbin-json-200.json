@@ -6,7 +6,7 @@
   },
   "response" : {
     "status" : 200,
-    "bodyFileName" : "body-httpbin-json-kBbJT.json",
+    "bodyFileName" : "body-httpbin-json-200.json",
     "headers" : {
       "Date" : "Sat, 17 Jan 2026 00:33:34 GMT",
       "Content-Type" : "application/json",

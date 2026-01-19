@@ -6,7 +6,7 @@
   },
   "response" : {
     "status" : 200,
-    "bodyFileName" : "body-httpbin-xml-bbW5S.xml",
+    "bodyFileName" : "body-httpbin-xml-200.xml",
     "headers" : {
       "Date" : "Sat, 17 Jan 2026 00:44:09 GMT",
       "Content-Type" : "application/xml",

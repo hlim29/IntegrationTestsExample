@@ -1,3 +1,4 @@
+using Microsoft.Azure.Cosmos;
 using Microsoft.Data.SqlClient;
 using System.Runtime.InteropServices;
 
@@ -46,7 +47,7 @@ namespace IntegrationTests
         public async Task MsSql_tests()
         {
             var sql = _testFixture.MsSql;
-            await sql.ExecuteSqlFileAsync("Sql/CreateUsers.sql");
+            await sql.ExecuteSqlFileAsync(["Sql/CreateUsers.sql"]);
 
             await using var connection = new SqlConnection(sql.ConnectionString);
             await connection.OpenAsync();
@@ -54,6 +55,29 @@ namespace IntegrationTests
             await using var countCommand = new SqlCommand("SELECT COUNT(*) FROM dbo.Users", connection);
             var rowCount = (int)await countCommand.ExecuteScalarAsync();
             Assert.Equal(5, rowCount);
+        }
+
+        [Fact]
+        public async Task CosmosDb_tests()
+        {
+            var clientOptions = new CosmosClientOptions
+            {
+                ConnectionMode = ConnectionMode.Gateway, // use HTTP mode
+                HttpClientFactory = () => _testFixture.CosmosDb.HttpClient
+            };
+
+            var connectionString = _testFixture.CosmosDb.ConnectionString;
+            using var cosmosClient = new CosmosClient(_testFixture.CosmosDb.ConnectionString, clientOptions);
+
+            string databaseName = "TestDatabase";
+            string containerName = "TestContainer";
+            await cosmosClient.CreateDatabaseIfNotExistsAsync(databaseName);
+            var database = cosmosClient.GetDatabase(databaseName);
+
+            // Define a partition key path (e.g., use "/id" as the partition key for simplicity)
+            await database.CreateContainerIfNotExistsAsync(containerName, "/id");
+            var container = database.GetContainer(containerName);
+            Assert.Equal("TestContainer", container.Id);
         }
     }
 }

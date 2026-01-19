@@ -8,7 +8,7 @@ namespace IntegrationTests.Containers
     {
         public override int[] Ports { get; protected set; }
         public string ConnectionString => $"server=localhost,{Ports.First()};user id={MsSqlBuilder.DefaultUsername};password={MsSqlBuilder.DefaultPassword};database={MsSqlBuilder.DefaultDatabase};TrustServerCertificate=true";
-        private static ushort MsSqlPort => 1433;
+        private static int MsSqlPort => 1433;
 
         public MsSqlContainerFixture()
             : base(new MsSqlBuilder("mcr.microsoft.com/mssql/server:2025-latest")
@@ -37,10 +37,18 @@ namespace IntegrationTests.Containers
         /// </summary>
         /// <param name="filePath"></param>
         /// <returns></returns>
-        public async Task ExecuteSqlFileAsync(string filePath)
+        public async Task ExecuteSqlFileAsync(params string[] files)
         {
-            var sql = await File.ReadAllTextAsync(filePath);
-            await ExecuteSqlAsync(sql);
+            foreach (var file in files)
+            {
+                var filePath = Path.Combine(AppContext.BaseDirectory, file);
+                if (!File.Exists(filePath))
+                {
+                    throw new FileNotFoundException($"SQL file not found: {filePath}");
+                }
+                var sql = await File.ReadAllTextAsync(file);
+                await ExecuteSqlAsync(sql);
+            }
         }
     }
 }

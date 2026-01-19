@@ -3,7 +3,7 @@ using DotNet.Testcontainers.Containers;
 using Testcontainers.Azurite;
 namespace IntegrationTests.Containers
 {
-    public sealed class AzureStorageContainerFixture : ContainerFixture<IContainer>
+    public sealed class AzureStorageContainerFixture : ContainerFixture<AzuriteContainer>
     {
         public override int[] Ports { get; protected set; }
         public BlobServiceClient BlobServiceClient => new BlobServiceClient(ConnectionString);
@@ -11,7 +11,7 @@ namespace IntegrationTests.Containers
         private const string AccountName = "devstoreaccount1";
         private const string AccountKey = "Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==";
 
-        public string ConnectionString => $"DefaultEndpointsProtocol=http;AccountName={AccountName};AccountKey={AccountKey};BlobEndpoint=http://127.0.0.1:{Ports[0]}/{AccountName};QueueEndpoint=http://127.0.0.1:{Ports[1]}/{AccountName};TableEndpoint=http://127.0.0.1:{Ports[2]}/{AccountName};";
+        public string ConnectionString { get; private set; }
 
         public AzureStorageContainerFixture()
             : base(new AzuriteBuilder("mcr.microsoft.com/azure-storage/azurite:3.35.0")
@@ -24,6 +24,7 @@ namespace IntegrationTests.Containers
         public override async Task InitializeAsync()
         {
             await base.InitializeAsync();
+            ConnectionString = Container.GetConnectionString();
             Ports = [.. AzuritePorts.Select(x => (int)Container.GetMappedPublicPort(x))];
         }
 
